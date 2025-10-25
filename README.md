@@ -48,18 +48,6 @@ npm test -- tests/ai/OpenRouter.test.js
 ### Run real AI translation test
 To run the test that calls real AI and translates actual content:
 
-**PowerShell:**
-$env:OPENROUTER_API_KEY='your-api-key-here'
-$env:OPENROUTER_BASE_URL='https://ai.121628.xyz'
-$env:OPENROUTER_MODEL='gemini-2.5-flash'
-npm test -- -t "translates real PDF using actual OpenRouter API"
-
-**Bash/Linux:**
-export OPENROUTER_API_KEY='your-api-key-here'
-export OPENROUTER_BASE_URL='https://ai.121628.xyz'
-export OPENROUTER_MODEL='gemini-2.5-flash'
-npm test -- -t "translates real PDF using actual OpenRouter API"
-
 This test will:
 - Read the PDF file from `tests/A_Brief_Introduction_To_AI.pdf`
 - Extract text content
@@ -67,6 +55,7 @@ This test will:
 - Display the first 5 sentences of both original and translated text
 - Save the translated text to `tests/A_Brief_Introduction_To_AI_translated.txt`
 
+```
 AI4SE/
 ├── src/
 │   ├── FileTranslatorService.js    # Main translation service
@@ -85,7 +74,8 @@ AI4SE/
 │   └── A_Brief_Introduction_To_AI.pdf      # Test PDF file
 ├── .env                            # Environment configuration
 ├── package.json                    # Project dependencies
-└── README.md                       
+└── README.md
+```        
 
 ### Supported Languages
 
