@@ -1,161 +1,136 @@
-AI File Translator Service (OpenRouter + LangChain-style chunking + Redis-queue parallelism)
+# AI File Translator Service
 
-Overview
-- Service translates files (txt, pdf, docx, xlsx, pptx) via AI.
-- Text is chunked to fit model context, enqueued, processed in parallel workers, re-aggregated, and rebuilt to a downloadable file.
-- Unit tests (18 cases) validate core flows: input validation, chunking, queue interactions, worker success/failure, language switching, and download flow.
+A Node.js-based translation service that uses AI to translate documents (PDF, DOCX, TXT, etc.) between languages. The service supports chunked translation for large documents and uses Redis for job queuing.
 
-Architecture
-Flow
-1) Upload: receive fileBuffer and fileName.
-2) Parse: extract text according to extension (parser factory).
-3) Chunk: split long text into overlapping chunks (context-friendly).
-4) Queue: push translation jobs to Redis queue (one per chunk).
-5) Worker: pulls jobs, calls OpenRouter model, stores partials.
-6) Aggregate: join chunk translations in original order.
-7) Rebuild: produce output buffer and filename base.lang.ext.
-8) Download: return artifact to client.
+## Features
 
-Key Modules
-- src/FileTranslatorService.js
-  - validateFile(fileName, buffer)
-  - validateLang(code, role)
-  - translateFile(buffer, fileName, sourceLang, targetLang)
-  - processJob(jobData)
-  - aggregateResults(jobId)
-  - rebuildFile(translatedText, ext)
-  - downloadFile(jobId)
-  - buildOutputFileName(original, targetLang)
-- src/parsers.js
-  - BaseParser, TextParser, PdfParser, DocxParser, XlsxParser, PptxParser
-  - createParser(ext)
-- src/queue/RedisQueue.js
-  - add(queueName, payload), consume(queueName, handler), ack(), nack(), stats()
-- src/clients/OpenRouterClient.js
-  - translate({ text, sourceLang, targetLang })
-- src/workers/translatorWorker.js
-  - run(): one-shot consumer using RedisQueue stub and OpenRouter client
+- 🌐 Multi-language translation using OpenRouter/AgentRouter API
+- 📄 Support for multiple file formats (PDF, DOCX, XLSX, PPTX, TXT)
+- ⚡ Chunked processing for large documents
+- 🔄 Redis-based job queue for scalable processing
+- 🧪 Comprehensive test suite with real AI integration tests
 
-Environment Configuration
-Create .env (example below). The client reads these via process.env in production usage:
-OPENROUTER_API_KEY=YOUR_API_KEY
-OPENROUTER_BASE_URL=OPEN_ROUTER
-OPENROUTER_MODEL=CHOOSE_MODEL
+## Prerequisites
 
-Installation
-- Requires Node.js 18+
-- Install dependencies
-  npm install
+- Node.js (v14 or higher)
+- Redis (optional, for production use)
+- OpenRouter/AgentRouter API key
 
-Testing
-- Jest is preconfigured in package.json
-  npm test
+## Installation
 
-Unit Test Coverage (18 cases)
-translateFile
-- Happy path: long text -> multiple chunks enqueued.
-- Language switch: vi -> ja respected.
-- Source auto: sourceLang = auto accepted.
-- Invalid languages rejected (source/target).
-- Unsupported extension rejected (.zip).
-- Non-buffer input rejected.
-- Empty buffer rejected.
-- Oversized file rejected (custom limit).
-- Parser empty text rejected.
-- Custom splitter respected (exact chunk count).
-processJob
-- Success: stores part, ack called, downloadable includes translated text.
-- Failure: records error, nack called, download throws aggregate error.
-aggregate & download
-- Aggregates out-of-order parts into correct order.
-- Download nonexistent job throws.
-- Download before results throws (no parts).
-- Output filename includes target language.
-Redis failures
-- Queue add failure bubbles (translateFile rejects).
+1. **Clone the repository**
+   git clone https://github.com/Ryuseikaiz/AI4SE.git
 
-Supported Formats and Parsers
-- TXT: TextParser
-- PDF: PdfParser (placeholder: returns UTF-8 text; replace with pdf-parse/pdfjs in prod)
-- DOCX: DocxParser (placeholder: replace with mammoth)
-- XLSX: XlsxParser (placeholder: replace with xlsx)
-- PPTX: PptxParser (placeholder: replace with office parser)
+2. **Install dependencies**
+   npm install
 
-Feature Scenarios + Example Testable Behaviors
-- Change translation language: set targetLang (e.g., en -> ja).
-- Download language: rebuilt filename pattern base.{target}.ext (e.g., report.ja.pdf).
-- Chunk ordering: assembly preserves original order by index.
-- Special content: emojis/markdown preserved by system prompt.
-- Error handling: bad API key, API 5xx, Redis connectivity, partial job failures (aggregate throws).
-- Large files: produce many chunks, still enqueue and process.
-- Edge text: empty/whitespace-only text is rejected.
+3. **Install PDF parsing library** (for real PDF text extraction)
+   npm install pdf-parse
 
-Usage Examples
-- Translate submission (server-side enqueue)
-  const { createParser } = require('./src/parsers');
-  const FileTranslatorService = require('./src/FileTranslatorService');
-  const RedisQueue = require('./src/queue/RedisQueue');
+4. **Configure environment variables**
+   Create a `.env` file in the root directory:
+   OPENROUTER_API_KEY=your-api-key-here
+   OPENROUTER_BASE_URL=https://ai.121628.xyz
+   OPENROUTER_MODEL=gemini-2.5-flash
 
-  async function submitTranslation(fileBuffer, fileName, sourceLang, targetLang) {
-    const ext = require('path').extname(fileName).toLowerCase();
-    const parser = createParser(ext);
-    const queue = new RedisQueue({ defaultQueueName: 'translation-jobs' });
+### Run all tests
+npm test
 
-    const service = new FileTranslatorService({
-      fileParser: parser,
-      redisQueue: queue,
-      aiClient: { translate: async () => '' } // not used on enqueue side
-    });
+**File Translator Service tests:**
+npm test -- tests/FileTranslatorService.test.js
 
-    const { jobId, chunkCount } = await service.translateFile(
-      fileBuffer,
-      fileName,
-      sourceLang,
-      targetLang
-    );
-    return { jobId, chunkCount };
-  }
+**Real file translation tests:**
+npm test -- tests/RealFileTranslation.test.js
 
-- Worker processing (development stub)
-  const { run } = require('./src/workers/translatorWorker');
-  run().then(() => console.log('Worker finished'));
+**OpenRouter integration tests:**
+npm test -- tests/ai/OpenRouter.test.js
 
-- Aggregate + download (after all chunks processed)
-  // Using same service/resultStore instance that worker wrote to in-memory.
-  const out = service.downloadFile(jobId);
-  // out.fileName -> base.lang.ext
-  // out.buffer   -> translated UTF-8 content
+### Run real AI translation test
+To run the test that calls real AI and translates actual content:
 
-Production Notes
-- Replace RedisQueue stub with a real queue (BullMQ / ioredis / Redis Streams).
-- Replace parsers with production libs to preserve structure/formatting.
-- Persist resultStore to Redis/DB to allow multi-instance workers and restart resiliency.
-- For PPTX/DOCX/XLSX rebuilding, maintain structure by mapping chunk positions back into documents (requires parser-level mapping metadata).
-- Implement retry/backoff for transient OpenRouter errors; implement circuit breaker and observability (metrics, logs).
+**PowerShell:**
+$env:OPENROUTER_API_KEY='your-api-key-here'
+$env:OPENROUTER_BASE_URL='https://ai.121628.xyz'
+$env:OPENROUTER_MODEL='gemini-2.5-flash'
+npm test -- -t "translates real PDF using actual OpenRouter API"
 
-Troubleshooting
-- OpenRouter API key: ensure OPENROUTER_API_KEY present and valid for your base URL.
-- Model ID: set OPENROUTER_MODEL to a supported model (currently gpt-5 per .env).
-- API errors: the OpenRouter client throws detailed errors including status code and body.
-- Queue not processing: ensure worker is running and consuming from the same queue name.
-- Tests fail due to environment: unit tests mock AI/Redis and do not invoke network calls.
+**Bash/Linux:**
+export OPENROUTER_API_KEY='your-api-key-here'
+export OPENROUTER_BASE_URL='https://ai.121628.xyz'
+export OPENROUTER_MODEL='gemini-2.5-flash'
+npm test -- -t "translates real PDF using actual OpenRouter API"
 
-Repository Structure
-/ (root)
-- package.json
-- .env
-- README.md
-- src/
-  - FileTranslatorService.js
-  - parsers.js
-  - clients/
-    - OpenRouterClient.js
-  - queue/
-    - RedisQueue.js
-  - workers/
-    - translatorWorker.js
-- tests/
-  - FileTranslatorService.test.js
+This test will:
+- Read the PDF file from `tests/A_Brief_Introduction_To_AI.pdf`
+- Extract text content
+- Translate from English to Vietnamese using real AI
+- Display the first 5 sentences of both original and translated text
+- Save the translated text to `tests/A_Brief_Introduction_To_AI_translated.txt`
 
-License
-- MIT
+AI4SE/
+├── src/
+│   ├── FileTranslatorService.js    # Main translation service
+│   ├── parsers.js                  # File parsers (PDF, DOCX, etc.)
+│   ├── clients/
+│   │   └── OpenRouterClient.js     # OpenRouter/AgentRouter API client
+│   ├── queue/
+│   │   └── RedisQueue.js           # Redis queue implementation
+│   └── workers/
+│       └── translatorWorker.js     # Background worker for processing
+├── tests/
+│   ├── FileTranslatorService.test.js       # Service unit tests
+│   ├── RealFileTranslation.test.js         # Real file translation tests
+│   ├── ai/
+│   │   └── OpenRouter.test.js              # AI integration tests
+│   └── A_Brief_Introduction_To_AI.pdf      # Test PDF file
+├── .env                            # Environment configuration
+├── package.json                    # Project dependencies
+└── README.md                       
+
+### Supported Languages
+
+Common language codes:
+- `en` - English
+- `vi` - Vietnamese
+- `ja` - Japanese
+- `zh` - Chinese
+- `fr` - French
+- `de` - German
+- `es` - Spanish
+- `auto` - Auto-detect (source language only)
+
+### Supported File Formats
+
+- `.txt` - Plain text files
+- `.pdf` - PDF documents (requires pdf-parse)
+- `.docx` - Microsoft Word documents
+- `.xlsx` - Microsoft Excel spreadsheets
+- `.pptx` - Microsoft PowerPoint presentations
+
+**Note:** For production use with binary formats (PDF, DOCX, etc.), you should install proper parsing libraries like `pdf-parse`, `mammoth`, `xlsx`, etc.
+
+Used Prompts:
+
+https://tamttt14.github.io/AI4SEProject/index.html Based on the instructions on this page, please provide me with specific checklists.
+
+Currently, I want to develop AI File Translator, list neccesary use cases
+
+Based on those use cases, list the require nodejs package
+
+Build the project
+
+Check the error log, and analyze it
+
+Create Unit Test package for this nodejs project (use jtest)
+
+Analyze this FileTranslatorClass and identify all functions that need unit testing
+
+Check get the api key from .env file
+
+Generate the unit test code 
+
+Describe purpose of those tests
+
+Create unit test for translate the real file, the A_Brief_Introduction_To_AI file
+
+Translate the provided pdf to Vietnamese and log to terminal

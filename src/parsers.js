@@ -24,13 +24,20 @@ class TextParser extends BaseParser {
 
 class PdfParser extends BaseParser {
   async extractText(buffer, fileName) {
-    // Naive fallback: Many PDFs are binary, this is for test/dev only
-    const text = buffer.toString('utf8');
-    if (!text || !text.trim()) {
-      // Provide a minimal placeholder so tests can proceed if needed
-      return `PDF(${fileName})`;
+    try {
+      // Try to use pdf-parse if available
+      const pdfParse = require('pdf-parse');
+      const data = await pdfParse(buffer);
+      return data.text || `PDF(${fileName})`;
+    } catch (err) {
+      // Fallback if pdf-parse is not installed or fails
+      console.warn('pdf-parse not available or failed, using naive fallback:', err.message);
+      const text = buffer.toString('utf8');
+      if (!text || !text.trim()) {
+        return `PDF(${fileName})`;
+      }
+      return text;
     }
-    return text;
   }
 }
 
