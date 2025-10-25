@@ -67,6 +67,7 @@ This test will:
 - Display the first 5 sentences of both original and translated text
 - Save the translated text to `tests/A_Brief_Introduction_To_AI_translated.txt`
 
+```
 AI4SE/
 ├── src/
 │   ├── FileTranslatorService.js    # Main translation service
@@ -85,7 +86,68 @@ AI4SE/
 │   └── A_Brief_Introduction_To_AI.pdf      # Test PDF file
 ├── .env                            # Environment configuration
 ├── package.json                    # Project dependencies
-└── README.md                       
+└── README.md                       # This file
+```
+
+## Usage Example
+
+### Basic Translation Service
+
+```javascript
+const FileTranslatorService = require('./src/FileTranslatorService');
+const OpenRouterClient = require('./src/clients/OpenRouterClient');
+const { createParser } = require('./src/parsers');
+
+// Initialize components
+const aiClient = new OpenRouterClient({
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseUrl: process.env.OPENROUTER_BASE_URL,
+  model: process.env.OPENROUTER_MODEL
+});
+
+const fileParser = createParser('.pdf');
+const redisQueue = null; // Use null for testing, provide Redis instance for production
+
+// Create service
+const service = new FileTranslatorService({
+  fileParser,
+  redisQueue,
+  aiClient
+});
+
+// Translate a file
+const fileBuffer = fs.readFileSync('document.pdf');
+const result = await service.translateFile(
+  fileBuffer,
+  'document.pdf',
+  'en',  // source language
+  'vi'   // target language
+);
+
+console.log(`Translation job ${result.jobId} created with ${result.chunkCount} chunks`);
+```
+
+### Direct Translation
+
+```javascript
+const OpenRouterClient = require('./src/clients/OpenRouterClient');
+
+const client = new OpenRouterClient({
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseUrl: process.env.OPENROUTER_BASE_URL,
+  model: 'gemini-2.5-flash'
+});
+
+const translated = await client.translate({
+  text: 'Hello, world!',
+  sourceLang: 'en',
+  targetLang: 'vi'
+});
+
+console.log(translated); // "Xin chào, thế giới!"
+```
+
+## Configuration
 
 ### Supported Languages
 
@@ -109,28 +171,70 @@ Common language codes:
 
 **Note:** For production use with binary formats (PDF, DOCX, etc.), you should install proper parsing libraries like `pdf-parse`, `mammoth`, `xlsx`, etc.
 
-Used Prompts:
+## API Configuration
 
-https://tamttt14.github.io/AI4SEProject/index.html Based on the instructions on this page, please provide me with specific checklists.
+### OpenRouter
 
-Currently, I want to develop AI File Translator, list neccesary use cases
+To use OpenRouter (https://openrouter.ai):
+```env
+OPENROUTER_API_KEY=sk-or-v1-xxxxx
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=openrouter/auto
+```
 
-Based on those use cases, list the require nodejs package
+### AgentRouter (Custom Gateway)
 
-Build the project
+To use a custom AgentRouter gateway:
+```env
+OPENROUTER_API_KEY=your-custom-key
+OPENROUTER_BASE_URL=https://your-gateway.com
+OPENROUTER_MODEL=gemini-2.5-flash
+```
 
-Check the error log, and analyze it
+## Development
 
-Create Unit Test package for this nodejs project (use jtest)
+### Running in Development Mode
 
-Analyze this FileTranslatorClass and identify all functions that need unit testing
+```bash
+npm test -- --watch
+```
 
-Check get the api key from .env file
+### Code Coverage
 
-Generate the unit test code 
+```bash
+npm test -- --coverage
+```
 
-Describe purpose of those tests
+## Troubleshooting
 
-Create unit test for translate the real file, the A_Brief_Introduction_To_AI file
+### PDF text extraction returns binary content
 
-Translate the provided pdf to Vietnamese and log to terminal
+If the PDF parser returns binary content (starting with `%PDF`), you need to install the `pdf-parse` library:
+
+```bash
+npm install pdf-parse
+```
+
+### API authentication errors (401)
+
+Make sure your API key is correctly set in the `.env` file or environment variables:
+
+```bash
+# PowerShell
+$env:OPENROUTER_API_KEY='your-key-here'
+
+# Bash
+export OPENROUTER_API_KEY='your-key-here'
+```
+
+### Model not found errors (503)
+
+Ensure the model name matches what's available in your API gateway. For AgentRouter, check that the model is configured in your gateway's model list.
+
+## License
+
+MIT
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.

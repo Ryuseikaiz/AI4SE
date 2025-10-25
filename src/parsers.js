@@ -25,21 +25,23 @@ class TextParser extends BaseParser {
 class PdfParser extends BaseParser {
   async extractText(buffer, fileName) {
     try {
-      // Try to use pdf-parse if available
-      const pdfParse = require('pdf-parse');
-      const data = await pdfParse(buffer);
+      const pdfParseImport = require('pdf-parse');
+      // Handle both CommonJS and ESM default exports
+      const pdfParseFn = pdfParseImport.default || pdfParseImport;
+      if (typeof pdfParseFn !== 'function') {
+        throw new Error('pdf-parse module did not export a function');
+      }
+
+      const data = await pdfParseFn(buffer);
       return data.text || `PDF(${fileName})`;
     } catch (err) {
-      // Fallback if pdf-parse is not installed or fails
       console.warn('pdf-parse not available or failed, using naive fallback:', err.message);
       const text = buffer.toString('utf8');
-      if (!text || !text.trim()) {
-        return `PDF(${fileName})`;
-      }
-      return text;
+      return text && text.trim() ? text : `PDF(${fileName})`;
     }
   }
 }
+
 
 class DocxParser extends BaseParser {
   async extractText(buffer, fileName) {

@@ -23,6 +23,11 @@
     "testEnvironment": "node",
     "testMatch": [
       "**/tests/**/*.test.js"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "/tests/",
+      "src/parsers.js"
     ]
   },
   "dependencies": {

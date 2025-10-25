@@ -26,12 +26,11 @@ loadEnvFromDotEnv();
 
 const OpenRouterClient = require('../../src/clients/OpenRouterClient');
 
-// Gate AI integration tests by RUN_AI_TESTS and presence of API key
-const RUN_AI = String(process.env.RUN_AI_TESTS || '').toLowerCase() === 'true';
+// Always run these tests if API key is available
 const HAS_KEY = !!process.env.OPENROUTER_API_KEY;
 
-// Use describe.skip unless explicitly enabled
-const maybeDescribe = RUN_AI && HAS_KEY ? describe : describe.skip;
+// Use describe.skip only if no API key
+const maybeDescribe = HAS_KEY ? describe : describe.skip;
 
 maybeDescribe('AI Integration with OpenRouterClient', () => {
   let client;
@@ -66,13 +65,15 @@ maybeDescribe('AI Integration with OpenRouterClient', () => {
 
 // Informative suite when tests are skipped
 describe('AI Integration gating', () => {
-  test('RUN_AI_TESTS must be true and OPENROUTER_API_KEY present to run AI tests', () => {
+  test('Shows API key configuration status', () => {
     const explain = {
-      RUN_AI_TESTS: process.env.RUN_AI_TESTS || '',
       OPENROUTER_API_KEY_SET: !!process.env.OPENROUTER_API_KEY,
       OPENROUTER_BASE_URL: process.env.OPENROUTER_BASE_URL || '',
       OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || ''
     };
     expect(typeof explain).toBe('object');
+    if (!process.env.OPENROUTER_API_KEY) {
+      console.log('⚠️  OPENROUTER_API_KEY not set - AI Integration tests will be skipped');
+    }
   });
 });
